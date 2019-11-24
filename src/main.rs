@@ -13,13 +13,7 @@ fn main() {
         avatar
     );
 
-
-    client.poll();
-    client.poll();
-    client.poll();
-    client.poll();
-    client.poll();
-    client.poll();
-    client.poll();
-    client.poll();
+    loop {
+        client.poll();
+    };
 }
