@@ -15,4 +15,11 @@ fn main() {
 
 
     client.poll();
+    client.poll();
+    client.poll();
+    client.poll();
+    client.poll();
+    client.poll();
+    client.poll();
+    client.poll();
 }

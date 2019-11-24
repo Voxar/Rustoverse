@@ -17,14 +17,14 @@ pub struct Client {
   connection: enet::Host<()>
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum ClientState {
   Initial,
   Interrupted(InterruptionState),
   Nominal,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum InterruptionState {
   Connecting,
   TryLater,
@@ -44,7 +44,7 @@ impl Client {
     ).unwrap();
     
     Client {
-      allospace: enet::Address::new(Ipv4Addr::LOCALHOST, 9001),
+      allospace: enet::Address::new(Ipv4Addr::LOCALHOST, 21337),
       identity: identity,
       avatar: avatar,
       state: ClientState::Initial,
@@ -56,13 +56,15 @@ impl Client {
 
     match self.state {
       ClientState::Initial => {
-        self.connection.connect(&self.allospace, 10, 0).unwrap();
+        println!("Initial");
+        self.connection.connect(&self.allospace, 2, 0).expect("failed starting connect");
         
         // move to interrupted
         self.state = ClientState::Interrupted(InterruptionState::Connecting); 
       }
       
       ClientState::Interrupted(state) => {
+        println!("Interrupted {:?}", state);
         self.handle_state_interrupted(state);
       }
       
@@ -78,19 +80,22 @@ impl Client {
     match state {
       InterruptionState::Connecting => {
         // connect to remote
-        match self.connection.service(1000).unwrap().unwrap() {
-          enet::Event::Connect(ref peer) => {
-            // self.peer = Some(peer);
+        let event = self.connection.service(1000)
+          .expect("service failed");
+        
+        match event {
+          None => return,
+          Some(enet::Event::Connect(ref peer)) => {
+            println!("We are connected");
             self.state = ClientState::Nominal;
           }
           
-          enet::Event::Disconnect(ref peer, reason) => {
+          Some(enet::Event::Disconnect(ref peer, reason)) => {
             println!("Peer {:?} disconnected: {}", peer, reason);
-            // self.peer = None;
             self.state = ClientState::Interrupted(InterruptionState::TryLater);
           }
           
-          enet::Event::Receive { .. } => {
+          Some(enet::Event::Receive { .. }) => {
             println!("Unexpected receive while waiting for a connection");
           }
         };
