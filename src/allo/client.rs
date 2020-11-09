@@ -1,13 +1,15 @@
 extern crate enet as ENET;
 use ENET::Enet;
+use std::net::Ipv4Addr;
+use serde_json::json;
 
 use super::shared::{Intent, Interaction, Identity, Avatar};
-use std::net::Ipv4Addr;
+use super::wire::WireObject;
 
-use serde_json::json;
 
 #[derive(Debug)]
 pub struct ConnectionError;
+
 
 pub struct Client {
   allospace: enet::Address,
@@ -55,7 +57,7 @@ impl Client {
   }
   
   pub fn poll(&mut self) {
-
+    
     match self.state {
       ClientState::Initial => {
         println!("Initial");
@@ -79,14 +81,14 @@ impl Client {
             let data = packet.data();
             println!("{:?}", std::str::from_utf8(data).expect("not utf8 string"));
           },
-
+          
           Some(enet::Event::Disconnect(peer, reason)) => {
             println!("{:?} got disconnected: {:?}", peer, reason);
             self.state = ClientState::Interrupted(InterruptionState::Connecting);
           },
-
+          
           None => return,
-
+          
           Some(x) => {
             println!("Other: {:?}", x);
           },
@@ -95,63 +97,67 @@ impl Client {
     }    
     
   }
-
+  
   fn handle_state_interrupted(&mut self, state: InterruptionState) {
     match state {
       InterruptionState::Connecting => {
         // connect to remote
         let event = self.connection.service(1000)
-          .expect("service failed");
+        .expect("service failed");
         
         match event {
           None => return,
           Some(enet::Event::Connect(ref peer)) => {
             println!("We are connected");
-            let json = json!([
-              "interaction",
-              "request",
-              "",
-              "place",
-              "ANN0",
-              [
-                "announce",
-                "version",
-                1,
-                "identity",
-                {
-                  "display_name": "Rusty Voxar",
-                },
-                "spawn_avatar",
-                {
-                  "id": "randomstring",
-                },
-              ]
+            
+            let body = json!([
+              "announce",
+              "version",
+              1,
+              "identity",
+              {
+                "display_name": "Rusty Voxar",
+              },
+              "spawn_avatar",
+              {
+                "id": "randomstring",
+              },
             ]);
-            let string = format!("{}{}", json.to_string(), "\n");
-            println!("JSON Balboa: {}", string);
-            let data = string.as_bytes();
-            let packet = enet::Packet::new(data, enet::PacketMode::ReliableSequenced)
+              
+              let int = Interaction {
+                kind: "request".to_string(),
+                sender_entity_id: "".to_string(),
+                receiver_entity_id: "place".to_string(),
+                request_id: "ANN0".to_string(),
+                body: body.to_string(),
+              };
+              
+              let string = format!("{}{}", int.to_wire(), "\n");
+              println!("JSON Balboa: {}", string);
+              let data = string.as_bytes();
+              let packet = enet::Packet::new(data, enet::PacketMode::ReliableSequenced)
               .expect("packet construct error");
-            peer.clone().send_packet(packet, 1).expect("Failed to send packet");
-
-            self.state = ClientState::Nominal;
-          }
-          
-          Some(enet::Event::Disconnect(ref peer, reason)) => {
-            println!("Peer {:?} disconnected: {}", peer, reason);
-            self.state = ClientState::Interrupted(InterruptionState::TryLater);
-          }
-          
-          Some(enet::Event::Receive { .. }) => {
-            println!("Unexpected receive while waiting for a connection");
-          }
-        };
-      }
-
-      InterruptionState::TryLater => {
-        //TODO: Schedule reconnection
-      }
-    };
+              peer.clone().send_packet(packet, 1).expect("Failed to send packet");
+              
+              self.state = ClientState::Nominal;
+            }
+            
+            Some(enet::Event::Disconnect(ref peer, reason)) => {
+              println!("Peer {:?} disconnected: {}", peer, reason);
+              self.state = ClientState::Interrupted(InterruptionState::TryLater);
+            }
+            
+            Some(enet::Event::Receive { .. }) => {
+              println!("Unexpected receive while waiting for a connection");
+            }
+          };
+        }
+        
+        InterruptionState::TryLater => {
+          //TODO: Schedule reconnection
+        }
+      };
+    }
+    
   }
   
-}
